@@ -101,6 +101,8 @@ See http://sebwouters.github.io/CheMPS2/index.html for more detail usages of
 these keywords.
 '''
 
+__version__ = '0.1.0'
+
 from pyscf.dmrgscf import dmrgci
 from pyscf.dmrgscf.dmrgci import DMRGCI, DMRGSCF, dryrun
 
