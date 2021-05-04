@@ -9,7 +9,7 @@ Install
 -------
 * Install to python site-packages folder
 ```
-pip install https://github.com/pyscf/dmrgscf
+pip install git+https://github.com/pyscf/dmrgscf
 ```
 
 * Install in a custom folder for development
