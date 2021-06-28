@@ -15,7 +15,7 @@
 
 NAME = 'pyscf-dmrgscf'
 DESCRIPTION  = 'DMRG interface to call Block code in PySCF'
-SO_EXTENSIONS = {
+SO_EXTENSIONS = { 'pyscf.lib.libunpack': ['pyscf/dmrgscf/unpack.c']
 }
 DEPENDENCIES = ['pyscf', 'numpy']
 
