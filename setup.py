@@ -17,7 +17,7 @@ NAME = 'pyscf-dmrgscf'
 DESCRIPTION  = 'DMRG interface to call Block code in PySCF'
 SO_EXTENSIONS = {
 }
-DEPENDENCIES = ['pyscf', 'numpy']
+DEPENDENCIES = ['pyscf', 'numpy', 'pyscf-icmpspt @ git+https://github.com/pyscf/icmpspt.git']
 
 #######################################################################
 # Unless not working, nothing below needs to be changed.
