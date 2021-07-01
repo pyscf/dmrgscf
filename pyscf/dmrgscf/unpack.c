@@ -175,3 +175,71 @@ void unpackE4(char* file, char* fout, int norb) {
     free(fj);
 };
 
+void unpackE3_BLOCK(char* file, char* fout, int norb) {
+    FILE *f = fopen(file, "rb");
+    size_t norb2 = norb*norb;
+    // no symmetry!
+    size_t e3slicesize = (norb2*norb2*norb2);
+    double *fj = (double*)malloc(e3slicesize*sizeof(double));
+    fseek(f,93,SEEK_SET);
+    fread(fj, sizeof(*fj), e3slicesize, f);
+    fclose(f);
+    double *e3 = (double*)malloc(norb2*norb2*norb2*sizeof(double));
+#pragma omp parallel default(none) \
+        shared(norb, norb2, e3, fj)
+{
+        int i, j, k, l, m, n;
+#pragma omp parallel for
+    for (i=0; i<norb; i++)
+      for (j=0; j<norb; j++)
+        for (k=0; k<norb; k++)
+          for (l=0; l<norb; l++)
+            for (m=0; m<norb; m++)
+              for (n=0; n<norb; n++)
+                {
+                  // is given as E^ijk_nml and is expected to come out as E^ijk_lmn
+                  size_t p = i+j*norb+k*norb2  +n*norb*norb2+m*norb2*norb2+l*norb2*norb2*norb;
+                  size_t q = i+j*norb+k*norb2  +l*norb*norb2+m*norb2*norb2+n*norb2*norb2*norb;
+                  e3[q] = fj[p];
+                };
+}
+    FILE *f2 = fopen(fout, "wb");
+    fwrite(e3, sizeof(*e3), norb2*norb2*norb2, f2);
+    fclose(f2);
+    free(e3);
+    free(fj);
+};
+
+void unpackE4_BLOCK(char* file, char* fout, int norb) {
+    FILE *f = fopen(file, "rb");
+    size_t norb2 = norb*norb;
+    // no symmetry!
+    size_t e4slicesize = (norb2*norb2*norb2*norb2);
+    double *fj = (double*)malloc(e4slicesize*sizeof(double));
+    fseek(f,109,SEEK_SET);
+    fread(fj, sizeof(*fj), e4slicesize, f);
+    fclose(f);
+    double *e4 = (double*)malloc(norb2*norb2*norb2*norb2*sizeof(double));
+    int i, j, k, h, l, m, n, o;
+    for (i=0; i<norb; i++)
+      for (j=0; j<norb; j++)
+        for (k=0; k<norb; k++)
+        for (h=0; h<norb; h++)
+          for (l=0; l<norb; l++)
+            for (m=0; m<norb; m++)
+              for (n=0; n<norb; n++)
+              for (o=0; o<norb; o++)
+                {
+                  // is given as E^ijkh_onml and is expected to come out as E^ijkh_lmno
+                  size_t p = i+j*norb+k*norb2+h*norb*norb2 +o*norb2*norb2+n*norb*norb2*norb2+m*norb2*norb2*norb2+l*norb*norb2*norb2*norb2;
+                  size_t q = i+j*norb+k*norb2+h*norb*norb2 +l*norb2*norb2+m*norb*norb2*norb2+n*norb2*norb2*norb2+o*norb*norb2*norb2*norb2;
+                  e4[q] = fj[p];
+                };
+    FILE *f2 = fopen(fout, "wb");
+    fwrite(e4, sizeof(*e4), norb2*norb2*norb2*norb2, f2);
+    fclose(f2);
+    free(e4);
+    free(fj);
+};
+
+
