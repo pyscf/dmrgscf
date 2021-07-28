@@ -26,7 +26,7 @@ You can find more details of extended modules in the document
 * Using DMRG as the FCI solver for CASSCF.  There are two DMRG solver
   interfaces implemented in this module
 
-      Block (https://sanshar.github.io/Block)
+      Block (https://pyscf.org/Block/)
       CheMPS2 (https://github.com/SebWouters/CheMPS2)
 
   After installing the DMRG solver, create a file dmrgscf/settings.py
