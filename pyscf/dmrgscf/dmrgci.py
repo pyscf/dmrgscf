@@ -38,7 +38,7 @@ from pyscf.dmrgscf import dmrg_sym
 from pyscf import __config__
 
 # Libraries
-libunpack = lib.load_library('libicmpspt')
+libunpack = lib.load_library('libunpack')
 
 # Settings
 try:
