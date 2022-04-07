@@ -777,7 +777,7 @@ class DMRGCI(lib.StreamObject):
 
 # Block code also allows non-spin-adapted calculation. S^2 is not available in
 # this type of calculation
-    if 'spin_adapted' in settings.BLOCKEXE:
+    if 'spin_adapted' in settings.BLOCKEXE or 'block2main' in settings.BLOCKEXE:
         def spin_square(self, civec, norb, nelec):
             if isinstance(nelec, (int, numpy.integer)):
                 nelecb = nelec//2
