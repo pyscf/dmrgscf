@@ -283,7 +283,10 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
 
     nevpt_conf = _load(mc_chkfile, 'dmrg.conf', comm)
     with open(nevpt_inp, 'w') as f:
-        f.write(nevpt_conf)
+        try:
+            f.write(nevpt_conf)
+        except TypeError:
+            f.write(str(nevpt_conf,"utf-8"))
         f.write('restart_mps_nevpt %d %d %d \n'%(ncas, partial_core, partial_virt))
 
     _distribute_dmrg_files(dmrg_scratch, nevpt_scratch_mpi, comm)
