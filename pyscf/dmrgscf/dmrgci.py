@@ -287,9 +287,11 @@ class DMRGCI(lib.StreamObject):
         # DMRGCI.make_rdm12 ensures that the basic make_rdm12 method is called.
         # (Issue https://github.com/pyscf/pyscf/issues/335)
         dm1, dm2 = DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)
-        dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
-        dm1n *= 1./(neleca-nelecb+1)
-        dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
+        N = neleca + nelecb
+        S = (neleca - nelecb) / 2
+        dm1n = (2 - N / 2) * dm1 - numpy.einsum('pkkq->pq', dm2)
+        dm1n *= 1 / (S + 1)
+        dm1a, dm1b = (dm1 + dm1n) * .5, (dm1 - dm1n) * .5
         return dm1a, dm1b
 
     def trans_rdm1s(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
