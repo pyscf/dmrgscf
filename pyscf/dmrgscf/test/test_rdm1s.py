@@ -50,10 +50,10 @@ class KnownValues(unittest.TestCase):
         mf = scf.ROHF(mol).run()
 
         # Calculate 1-RDM for three electrons in five orbitals with CASCI.
-        rdm1s_casci = casci_rdm1s(mf, 5, 3)
+        rdm1s_casci = casci_rdm1s(mf, 5, 3, nroots=2, root=0)
 
         # Calculate 1-RDM for three electrons in five orbitals with DMRG-CASCI.
-        rdm1s_dmrgci = dmrgci_rdm1s(mf, 5, 3)
+        rdm1s_dmrgci = dmrgci_rdm1s(mf, 5, 3, nroots=2, root=0)
 
         # Main check: 1-RDMs from normal FCI and DMRG must be sufficiently close.
         self.assertTrue(numpy.allclose(rdm1s_dmrgci, rdm1s_casci, atol=1.0e-5, rtol=0.0))
