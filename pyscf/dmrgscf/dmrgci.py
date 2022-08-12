@@ -151,7 +151,7 @@ class DMRGCI(lib.StreamObject):
         self.scheduleTols   = []
         self.scheduleNoises = []
         self.onlywriteIntegral = False
-        self.spin = 0
+        self.spin = mol.spin if mol is not None else 0
         self.orbsym = []
         if mol is None:
             self.groupname = None
@@ -712,6 +712,10 @@ class DMRGCI(lib.StreamObject):
             self.orbsym = kwargs['orbsym']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         writeDMRGConfFile(self, nelec, fciRestart)
+        # Adapt spin to match the number of alpha and beta electrons supplied to kernel.
+        if lib.isintsequence(nelec):
+            neleca, nelecb = nelec
+            self.spin = neleca - nelecb
         if self.verbose >= logger.DEBUG1:
             inFile = os.path.join(self.runtimeDir, self.configFile)
             logger.debug1(self, 'Block Input conf')
