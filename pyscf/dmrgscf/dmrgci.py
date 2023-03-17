@@ -146,10 +146,10 @@ class DMRGCI(lib.StreamObject):
         self.startM =  None
         self.restart = False
         self.nonspinAdapted = False
-        self.scheduleSweeps = []
-        self.scheduleMaxMs  = []
-        self.scheduleTols   = []
-        self.scheduleNoises = []
+        self._scheduleSweeps = []
+        self._scheduleMaxMs  = []
+        self._scheduleTols   = []
+        self._scheduleNoises = []
         self.onlywriteIntegral = False
         self.spin = mol.spin if mol is not None else 0
         self.orbsym = []
@@ -171,9 +171,41 @@ class DMRGCI(lib.StreamObject):
         # This flag _restart is set by the program internally, to control when to make
         # Block restart calculation.
         self._restart = False
-        self.generate_schedule()
         self.returnInt = False
+        self._schedule_manually = False
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def scheduleSweeps(self):
+        return self._scheduleSweeps
+    @scheduleSweeps.setter
+    def scheduleSweeps(self, val):
+        self._schedule_manually = True
+        self._scheduleSweeps = val
+
+    @property
+    def scheduleMaxMs(self):
+        return self._scheduleMaxMs
+    @scheduleMaxMs.setter
+    def scheduleMaxMs(self, val):
+        self._schedule_manually = True
+        self._scheduleMaxMs = val
+
+    @property
+    def scheduleTols(self):
+        return self._scheduleTols
+    @scheduleTols.setter
+    def scheduleTols(self, val):
+        self._schedule_manually = True
+        self._scheduleTols = val
+
+    @property
+    def scheduleNoises(self):
+        return self._scheduleNoises
+    @scheduleNoises.setter
+    def scheduleNoises(self, val):
+        self._schedule_manually = True
+        self._scheduleNoises = val
 
 
     @property
@@ -205,34 +237,35 @@ class DMRGCI(lib.StreamObject):
                 self.startM = 50
             else:
                 self.startM = 200
-        if len(self.scheduleSweeps) == 0:
-            startM = self.startM
-            N_sweep = 0
-            if self.restart or self._restart :
-                Tol = self.tol / 10.0
-            else:
-                Tol = 1.0e-4
-            while startM < int(self.maxM):
-                self.scheduleSweeps.append(N_sweep)
-                N_sweep += 4
-                self.scheduleMaxMs.append(startM)
-                startM *= 2
-                self.scheduleTols.append(Tol)
-                self.scheduleNoises.append(Tol)  # Noise=Tol
-            while Tol > float(self.tol):
-                self.scheduleSweeps.append(N_sweep)
-                N_sweep += 2
-                self.scheduleMaxMs.append(self.maxM)
-                self.scheduleTols.append(Tol)
-                self.scheduleNoises.append(Tol)  # Noise=Tol
-                Tol /= 10.0
+
+        self.clearSchedule()
+        startM = self.startM
+        N_sweep = 0
+        if self.restart or self._restart :
+            Tol = self.tol / 10.0
+        else:
+            Tol = 1.0e-4
+        while startM < int(self.maxM):
+            self.scheduleSweeps.append(N_sweep)
+            N_sweep += 4
+            self.scheduleMaxMs.append(startM)
+            startM *= 2
+            self.scheduleTols.append(Tol)
+            self.scheduleNoises.append(Tol)  # Noise=Tol
+        while Tol > float(self.tol):
             self.scheduleSweeps.append(N_sweep)
             N_sweep += 2
             self.scheduleMaxMs.append(self.maxM)
-            self.scheduleTols.append(self.tol / 10.0)
-            self.scheduleNoises.append(0.0)
-            self.twodot_to_onedot = N_sweep + 2
-            self.maxIter = self.twodot_to_onedot + 8
+            self.scheduleTols.append(Tol)
+            self.scheduleNoises.append(Tol)  # Noise=Tol
+            Tol /= 10.0
+        self.scheduleSweeps.append(N_sweep)
+        N_sweep += 2
+        self.scheduleMaxMs.append(self.maxM)
+        self.scheduleTols.append(self.tol / 10.0)
+        self.scheduleNoises.append(0.0)
+        self.twodot_to_onedot = N_sweep + 2
+        self.maxIter = self.twodot_to_onedot + 8
         return self
 
     def dump_flags(self, verbose=None):
@@ -314,9 +347,9 @@ class DMRGCI(lib.StreamObject):
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
-          nelectrons = nelec
+            nelectrons = nelec
         else:
-          nelectrons = nelec[0]+nelec[1]
+            nelectrons = nelec[0]+nelec[1]
 
         # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
         # are written as E2[i1,j2,k2,l1]
@@ -341,13 +374,16 @@ class DMRGCI(lib.StreamObject):
         return DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)[0]
 
     def trans_rdm12(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
+        if not self._schedule_manually:
+            self.generate_schedule()
+
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
             nelectrons = nelec
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        writeDMRGConfFile(self, nelec, True,\
+        writeDMRGConfFile(self, nelec, True,
                           with_2pdm=False, extraline=['restart_tran_twopdm',
                                                       'specificpdm %d %d' % (statebra, stateket)])
         executeBLOCK(self)
@@ -372,8 +408,11 @@ class DMRGCI(lib.StreamObject):
         return onepdm, twopdm
 
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
-        if self.has_threepdm == False:
-            writeDMRGConfFile(self, nelec, True,\
+        if not self.has_threepdm:
+            if not self._schedule_manually:
+                self.generate_schedule()
+
+            writeDMRGConfFile(self, nelec, True,
                               with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
                 inFile = os.path.join(self.runtimeDir, self.configFile)
@@ -407,12 +446,12 @@ class DMRGCI(lib.StreamObject):
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
         file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
         with open(os.path.join(self.scratchDirectory, "node0", file3pdm), "r") as f:
-          norb_read = int(f.readline().split()[0])
-          assert(norb_read == norb)
-          for line in f:
-              linesp = line.split()
-              i,j,k, l,m,n = [int(x) for x in linesp[:6]]
-              threepdm[i,j,k,l,m,n] = float(linesp[6])
+            norb_read = int(f.readline().split()[0])
+            assert(norb_read == norb)
+            for line in f:
+                linesp = line.split()
+                i,j,k, l,m,n = [int(x) for x in linesp[:6]]
+                threepdm[i,j,k,l,m,n] = float(linesp[6])
 
         # (This is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
@@ -443,11 +482,12 @@ class DMRGCI(lib.StreamObject):
         return onepdm, twopdm, threepdm
 
     def make_rdm3(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
-        import os
+        if not self.has_threepdm:
+            if not self._schedule_manually:
+                self.generate_schedule()
 
-        if self.has_threepdm == False:
             self.twopdm = False
-            if restart == True:
+            if restart:
                 self.extraline.append('restart_threepdm')
             else:
                 self.extraline.append('threepdm')
@@ -480,53 +520,54 @@ class DMRGCI(lib.StreamObject):
         # This is done with SQA in mind.
         start = logger.perf_counter()
         if (filetype == "binary") :
-          # The binary files coming from STACKBLOCK and BLOCK are different
-          # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
-          #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
-          # - BLOCK just writes a list of all values, this is directly read
-          #   using "unpackE3_BLOCK" (see below)
-          if block_version(self.executable).startswith('1.5'):
-            logger.info(self, 'Reading binary 3RDM from STACKBLOCK')
-            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
-            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
-            libunpack.unpackE3(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
-            E3 = numpy.fromfile(fnameout, dtype=numpy.float64)
-            E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
-          else:
-            logger.info(self, 'Reading binary 3RDM from BLOCK')
-            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
-            E3 = self.unpackE3_BLOCK(fname,norb)
+            # The binary files coming from STACKBLOCK and BLOCK are different
+            # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
+            #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
+            # - BLOCK just writes a list of all values, this is directly read
+            #   using "unpackE3_BLOCK" (see below)
+            if block_version(self.executable).startswith('1.5'):
+                logger.info(self, 'Reading binary 3RDM from STACKBLOCK')
+                fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
+                fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+                libunpack.unpackE3(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
+                E3 = numpy.fromfile(fnameout, dtype=numpy.float64)
+                E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
+            else:
+                logger.info(self, 'Reading binary 3RDM from BLOCK')
+                fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
+                E3 = self.unpackE3_BLOCK(fname,norb)
 
         # The 3RDMs text files written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
         else:
-          logger.info(self, 'Reading text-file 3RDM')
-          fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
-          f = open(fname, 'r')
-          lines = f.readlines()
-          E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
-          assert(int(lines[0])==norb)
-          for line in lines[1:]:
-            linesp = line.split()
-            if (len(linesp) != 7) :
-                continue
-            a,b,c, d,e,f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]),\
-                                     int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
-            self.populate(E3, [a,b,c,  f,e,d], integral)
+            logger.info(self, 'Reading text-file 3RDM')
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
+            f = open(fname, 'r')
+            lines = f.readlines()
+            E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+            assert(int(lines[0])==norb)
+            for line in lines[1:]:
+                linesp = line.split()
+                if (len(linesp) != 7) :
+                    continue
+                a,b,c, d,e,f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]),\
+                                         int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
+                self.populate(E3, [a,b,c,  f,e,d], integral)
         end = logger.perf_counter()
         logger.info(self, '......reading the RDM took    %10.2f sec\n' %(end-start))
         return E3
 
     def make_rdm4(self, state, norb, nelec, dt=numpy.float64, filetype = "binary", link_index=None, restart=False, **kwargs):
-        import os
+        if not self.has_fourpdm:
+            if not self._schedule_manually:
+                self.generate_schedule()
 
-        if self.has_fourpdm == False:
             self.twopdm = False
             self.threepdm = False
             self.twopdm = False
-            if restart == True:
+            if restart:
                 self.extraline.append('restart_threepdm')
                 self.extraline.append('restart_fourpdm')
             else:
@@ -535,10 +576,10 @@ class DMRGCI(lib.StreamObject):
             writeDMRGConfFile(self, nelec, restart)
 
             if self.verbose >= logger.DEBUG1:
-              inFile = self.configFile
-              #inFile = os.path.join(self.scratchDirectory,self.configFile)
-              logger.debug1(self, 'Block Input conf')
-              logger.debug1(self, open(inFile, 'r').read())
+                inFile = self.configFile
+                #inFile = os.path.join(self.scratchDirectory,self.configFile)
+                logger.debug1(self, 'Block Input conf')
+                logger.debug1(self, open(inFile, 'r').read())
 
             start = logger.perf_counter()
             mpisave=self.mpiprefix
@@ -562,23 +603,23 @@ class DMRGCI(lib.StreamObject):
         # This is done with SQA in mind.
         start = logger.perf_counter()
         if (filetype == "binary") :
-          # The binary files coming from STACKBLOCK and BLOCK are different:
-          # - STACKBLOCK does not have 4RDM
-          #   If it had, it would probably come in a 8-fold symmetr which must unpacked
-          #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
-          # - BLOCK just writes a list of all values, this is directly read
-          #   using "unpackE4_BLOCK" (see below)
-          if block_version(self.executable).startswith('1.5'):
-            logger.info(self, 'Reading binary 4RDM from STACKBLOCK')
-            fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
-            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
-            libunpack.unpackE4(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
-            E4 = numpy.fromfile(fnameout, dtype=numpy.float64)
-            E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
-          else:
-            logger.info(self, 'Reading binary 4RDM from BLOCK')
-            fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
-            E4 = self.unpackE4_BLOCK(fname,norb)
+            # The binary files coming from STACKBLOCK and BLOCK are different:
+            # - STACKBLOCK does not have 4RDM
+            #   If it had, it would probably come in a 8-fold symmetr which must unpacked
+            #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
+            # - BLOCK just writes a list of all values, this is directly read
+            #   using "unpackE4_BLOCK" (see below)
+            if block_version(self.executable).startswith('1.5'):
+                logger.info(self, 'Reading binary 4RDM from STACKBLOCK')
+                fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
+                fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
+                libunpack.unpackE4(ctypes.c_char_p(fname.encode()), ctypes.c_char_p(fnameout.encode()), ctypes.c_int(norb))
+                E4 = numpy.fromfile(fnameout, dtype=numpy.float64)
+                E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
+            else:
+                logger.info(self, 'Reading binary 4RDM from BLOCK')
+                fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
+                E4 = self.unpackE4_BLOCK(fname,norb)
 
         # The 4RDMs text files written by "Fourpdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
         # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
@@ -592,12 +633,12 @@ class DMRGCI(lib.StreamObject):
             E4 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
             assert(int(lines[0])==norb)
             for line in lines[1:]:
-              linesp = line.split()
-              if (len(linesp) != 9) :
-                  continue
-              a,b,c,d, e,f,g,h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]),\
-                                           int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
-              self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
+                linesp = line.split()
+                if (len(linesp) != 9) :
+                    continue
+                a,b,c,d, e,f,g,h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]),\
+                                             int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
+                self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
         end = logger.perf_counter()
         logger.info(self, '......reading the RDM took    %10.2f sec\n' %(end-start))
         return E4
@@ -608,8 +649,8 @@ class DMRGCI(lib.StreamObject):
         dn=list[dim:]
         import itertools
         for t in itertools.permutations(range(dim), dim):
-          updn=[up[i] for i in t]+[dn[i] for i in t]
-          array[tuple(updn)] = value
+            updn=[up[i] for i in t]+[dn[i] for i in t]
+            array[tuple(updn)] = value
 
     def unpackE3_BLOCK(self,fname,norb):
         # The 3RDMs written by "Threepdm_container::save_spatial_npdm_binary" in BLOCK
@@ -622,18 +663,18 @@ class DMRGCI(lib.StreamObject):
         #fil.seek(93) # HOW DANGEROUS IS THAT ???!?!?!?
         fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
-          for b in range(norb):
-            for c in range(norb):
-              for d in range(norb):
-                for e in range(norb):
-                  for f in range(norb):
-                    (value,)=struct.unpack('d',fil.read(8))
-                    E3[a,b,c,  f,e,d]=value
+            for b in range(norb):
+                for c in range(norb):
+                    for d in range(norb):
+                        for e in range(norb):
+                            for f in range(norb):
+                                (value,)=struct.unpack('d',fil.read(8))
+                                E3[a,b,c,  f,e,d]=value
         try:
-          (value,)=struct.unpack('c',fil.read(1))
-          logger.warn(self, "MORE bytes TO READ!")
-        except:
-          logger.warn(self, "AT LEAST, NO MORE bytes TO READ!")
+            (value,)=struct.unpack('c',fil.read(1))
+            logger.warn(self, "MORE bytes TO READ!")
+        except Exception:
+            logger.warn(self, "AT LEAST, NO MORE bytes TO READ!")
         #exit(0)
         fil.close()
         return E3
@@ -648,33 +689,33 @@ class DMRGCI(lib.StreamObject):
         logger.debug1(self, "[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
         fil.seek(109) # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
-          for b in range(norb):
-            for c in range(norb):
-              for d in range(norb):
-                for e in range(norb):
-                  for f in range(norb):
-                    for g in range(norb):
-                      for h in range(norb):
-                        (value,)=struct.unpack('d',fil.read(8))
-                        E4[a,b,c,d,  h,g,f,e]=value
+            for b in range(norb):
+                for c in range(norb):
+                    for d in range(norb):
+                        for e in range(norb):
+                            for f in range(norb):
+                                for g in range(norb):
+                                    for h in range(norb):
+                                        (value,)=struct.unpack('d',fil.read(8))
+                                        E4[a,b,c,d,  h,g,f,e]=value
         try:
-          (value,)=struct.unpack('c',fil.read(1))
-          logger.warn(self, "MORE bytes TO READ!")
-        except:
-          logger.warn(self, "AT LEAST, NO MORE bytes TO READ!")
+            (value,)=struct.unpack('c',fil.read(1))
+            logger.warn(self, "MORE bytes TO READ!")
+        except Exception:
+            logger.warn(self, "AT LEAST, NO MORE bytes TO READ!")
         #exit(0)
         fil.close()
         return E4
 
     def clearSchedule(self):
-        self.scheduleSweeps = []
-        self.scheduleMaxMs = []
-        self.scheduleTols = []
-        self.scheduleNoises = []
+        self._scheduleSweeps = []
+        self._scheduleMaxMs = []
+        self._scheduleTols = []
+        self._scheduleNoises = []
 
     def nevpt_intermediate(self, tag, norb, nelec, state, **kwargs):
 
-        if self.has_nevpt == False:
+        if not self.has_nevpt:
             writeDMRGConfFile(self, nelec, True,
                               with_2pdm=False, extraline=['restart_nevpt2_npdm'])
             if self.verbose >= logger.DEBUG1:
@@ -701,6 +742,9 @@ class DMRGCI(lib.StreamObject):
         return a16
 
     def kernel(self, h1e, eri, norb, nelec, fciRestart=None, ecore=0, **kwargs):
+        if not self._schedule_manually:
+            self.generate_schedule()
+
         if self.nroots == 1:
             roots = 0
         else:
@@ -745,6 +789,9 @@ class DMRGCI(lib.StreamObject):
         return calc_e, roots
 
     def approx_kernel(self, h1e, eri, norb, nelec, fciRestart=None, ecore=0, **kwargs):
+        if not self._schedule_manually:
+            self.generate_schedule()
+
         fciRestart = True
 
         if 'orbsym' in kwargs:
@@ -845,7 +892,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
         f.write('%s\n' % schedule)
     else :
         f.write('schedule\n')
-        #if approx == True :
+        #if approx:
         #    f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol*10.0, 0e-6))
         #else :
         #    f.write('0 %6i  %8.4e  %8.4e \n' %(DMRGCI.maxM, DMRGCI.tol, 0e-6))
@@ -916,17 +963,17 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         eri_cas = ao2mo.restore(4, eri_cas, ncas)
         eri_cas[sym_forbid] = 0
         eri_cas = ao2mo.restore(8, eri_cas, ncas)
-       #orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym))
-       #eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
+        #orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym))
+        #eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
 # Then convert the pyscf internal irrep-ID to molpro irrep-ID
         orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, orbsym))
     else:
         orbsym = []
         eri_cas = ao2mo.restore(8, eri_cas, ncas)
-    # The following checks for scratch on node0 only but it can be missing on node1 etc.
-    # The previous WF could have been copied to node0.
-    # Comment out the if for now.
-    # if not os.path.exists(DMRGCI.scratchDirectory):
+        # The following checks for scratch on node0 only but it can be missing on node1 etc.
+        # The previous WF could have been copied to node0.
+        # Comment out the if for now.
+        # if not os.path.exists(DMRGCI.scratchDirectory):
         # os.makedirs(DMRGCI.scratchDirectory)
     cmd = ' '.join((DMRGCI.mpiprefix, "mkdir -p", DMRGCI.scratchDirectory))
     check_call(cmd, shell=True)
