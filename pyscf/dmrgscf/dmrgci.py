@@ -578,7 +578,8 @@ class DMRGCI(lib.StreamObject):
           else:
             logger.info(self, 'Reading binary 4RDM from BLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
-            E4 = self.unpackE4_BLOCK(fname,norb)
+            E4 = numpy.fromfile(open(fname, 'rb'), offset=109, dtype=float).reshape((norb,) * 8).transpose(0, 1, 2, 3, 7, 6, 5, 4)
+            # E4 = self.unpackE4_BLOCK(fname,norb)
 
         # The 4RDMs text files written by "Fourpdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
         # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
